@@ -49,94 +49,12 @@ ITEM_TYPES = {
     ),
 }
 
-
-class InventoryItem(arcade.sprite.Sprite):
-    def __init__(self, *, shape, name, texture, left, top, **kwargs):
-        super().__init__(**kwargs)
-        self.shape = shape
-        self.name = name
+TWEEN_RATE = 5
+class TweenableSprite(arcade.sprite.Sprite):
+    def __init__(self, scale, left, top, texture):
+        super().__init__(scale=scale)
 
         self.append_texture(texture)
-        self.set_texture(0)
-
-        self.left = left
-        self.top = top
-
-    @classmethod
-    def get_item(cls, item_type, left, top, scale):
-        shape, texture = ITEM_TYPES[item_type]
-
-        return InventoryItem(
-            left=left,
-            top=top,
-            shape=shape,
-            scale=scale,
-            name=item_type,
-            texture=texture,
-        )
-
-    def __repr__(self):
-        return self.name
-
-
-class InventoryGrid:
-    def __init__(self, tile_size, rows, columns, offset_x, offset_y):
-        self.tile_size = tile_size
-        self.scale = tile_size / ASSET_TILE_SIZE
-        self.gap = tile_size / TILE_SIZE_GAP_RATIO
-        self.offset_x = offset_x
-        self.offset_y = offset_y
-
-        self.rows = rows
-        self.columns = columns
-        self.tiles = {
-            (x, y): InventoryTile(
-                x=x * (self.tile_size + self.gap) + offset_x,
-                y=y * (self.tile_size + self.gap) + offset_y,
-                size=self.tile_size,
-            )
-            for x in range(columns)
-            for y in range(rows)
-        }
-        self.contents = {}
-
-    def place_item(self, item, row, col):
-        for x, y in item.shape:
-            assert 0 <= col + x < self.columns, (x, col)
-            assert 0 <= row - y < self.rows, (y, row)
-            assert not self.contents.get((col + x, row - y))
-            self.contents[col + x, row - y] = item
-
-    def draw(self):
-        for tile in self.tiles.values():
-            tile.draw()
-
-    def pointer_coord_at(self, row, col):
-        return (
-            int(col * (self.tile_size + self.gap) + self.offset_x),
-            int(row * (self.tile_size + self.gap) + self.offset_y),
-            self.scale,
-        )
-
-    def item_coord_at(self, row, col):
-        """
-        Transform a row,col coord to screen x, y, and scale.
-        """
-        return (
-            int(col * (self.tile_size + self.gap) + self.offset_x - self.tile_size / 2 - self.gap),
-            int(row * (self.tile_size + self.gap) + self.offset_y + self.tile_size / 2 + self.gap),
-            self.scale,
-        )
-
-
-TWEEN_RATE = 5
-class Pointer(arcade.sprite.Sprite):
-    def __init__(self, left, top, scale):
-        super().__init__()
-
-        self.scale = scale  # needs to happen before texture set.
-
-        self.append_texture(TEXTURES['pointer'])
         self.set_texture(0)
 
         # needs to happen after texture set.
@@ -174,6 +92,100 @@ class Pointer(arcade.sprite.Sprite):
         self._set_tween(left=x, top=y, scale=scale)
 
 
+class InventoryItem(TweenableSprite):
+    def __init__(self, *, shape, name, texture, left, top, scale):
+        super().__init__(
+            scale=scale,
+            left=left,
+            top=top,
+            texture=texture,
+        )
+        self.shape = shape
+        self.name = name
+
+    @classmethod
+    def get_item(cls, item_type, left, top, scale):
+        shape, texture = ITEM_TYPES[item_type]
+
+        return InventoryItem(
+            left=left,
+            top=top,
+            shape=shape,
+            scale=scale,
+            name=item_type,
+            texture=texture,
+        )
+
+    def __repr__(self):
+        return self.name
+
+
+class Pointer(TweenableSprite):
+    def __init__(self, left, top, scale):
+        super().__init__(
+            scale=scale,
+            left=left,
+            top=top,
+            texture=TEXTURES['pointer'],
+        )
+
+        self.lifted_item = None
+
+
+class InventoryGrid:
+    def __init__(self, tile_size, rows, columns, offset_x, offset_y):
+        self.tile_size = tile_size
+        self.scale = tile_size / ASSET_TILE_SIZE
+        self.gap = tile_size / TILE_SIZE_GAP_RATIO
+        self.offset_x = offset_x
+        self.offset_y = offset_y
+
+        self.rows = rows
+        self.columns = columns
+        self.tiles = {
+            (x, y): InventoryTile(
+                x=x * (self.tile_size + self.gap) + offset_x,
+                y=y * (self.tile_size + self.gap) + offset_y,
+                size=self.tile_size,
+            )
+            for x in range(columns)
+            for y in range(rows)
+        }
+        self.contents = {}
+
+    def place_item(self, item, row, col):
+        for x, y in item.shape:
+            assert 0 <= col + x < self.columns, (x, col)
+            assert 0 <= row - y < self.rows, (y, row)
+            assert not self.contents.get((col + x, row - y))
+            self.contents[col + x, row - y] = item
+
+    def lift_item(self, row, col):
+        item = self.contents[col, row]
+        return item
+
+    def draw(self):
+        for tile in self.tiles.values():
+            tile.draw()
+
+    def pointer_coord_at(self, row, col):
+        return (
+            int(col * (self.tile_size + self.gap) + self.offset_x),
+            int(row * (self.tile_size + self.gap) + self.offset_y),
+            self.scale,
+        )
+
+    def item_coord_at(self, row, col):
+        """
+        Transform a row,col coord to screen x, y, and scale.
+        """
+        return (
+            int(col * (self.tile_size + self.gap) + self.offset_x - self.tile_size / 2 - self.gap),
+            int(row * (self.tile_size + self.gap) + self.offset_y + self.tile_size / 2 + self.gap),
+            self.scale,
+        )
+
+
 class InventoryScreen:
     def __init__(self):
         # grids
@@ -198,18 +210,21 @@ class InventoryScreen:
 
         # items
         self.items = []
-        self.add_item('grapple_hook', 'inventory', 3, 0)
-        self.add_item('mushroom', 'inventory', 3, 2)
+        self.add_new_item('grapple_hook', 'inventory', 3, 0)
+        self.add_new_item('mushroom', 'inventory', 3, 2)
 
         # pointer
         self.pointer_location = ['inventory', 0, 0]
         x, y, scale = inventory.pointer_coord_at(0, 0)
         self.pointer = Pointer(left=x, top=y, scale=scale)
 
-    def add_item(self, item, grid_name, row, col):
+    def add_new_item(self, item_name, grid_name, row, col):
+        """
+        Add an entirely new item to the world of the inventory screen.
+        """
         grid = self.grids[grid_name]
         x, y, scale = grid.item_coord_at(row, col)
-        item = InventoryItem.get_item(item, x, y, scale)
+        item = InventoryItem.get_item(item_name, x, y, scale)
         self.items.append(item)
         grid.place_item(item, row, col)
 
@@ -229,6 +244,8 @@ class InventoryScreen:
 
     def update(self, dt):
         self.pointer.update(dt)
+        for item in self.items:
+            item.update(dt)
 
     def handle_action(self, action):
         if action in DIRECTIONS:
@@ -260,6 +277,16 @@ class InventoryScreen:
             grid, c, r = self.pointer_location
             x, y, scale = self.grids[grid].pointer_coord_at(r, c)
             self.pointer.move_to(x, y, scale)
+            if self.pointer.lifted_item:
+                x, y, scale = self.grids[grid].item_coord_at(r, c)
+                self.pointer.lifted_item.move_to(x, y, scale)
+        elif action == PlayerAction.select:
+            grid, c, r = self.pointer_location
+            if self.pointer.lifted_item:
+                self.grids[grid].place_item(self.pointer.lifted_item, r, c)
+                self.pointer.lifted_item = None
+            else:
+                self.pointer.lifted_item = self.grids[grid].lift_item(r, c)
 
 
 class PlayerAction(enum.Enum):
