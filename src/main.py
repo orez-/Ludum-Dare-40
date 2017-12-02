@@ -129,6 +129,10 @@ class Pointer(arcade.sprite.Sprite):
         self._tween = {}
         self._tween_progress = 1
 
+    @property
+    def can_move(self):
+        return self._tween_progress == 1
+
     def update(self, dt):
         if self._tween_progress == 1:
             return
@@ -150,8 +154,7 @@ class Pointer(arcade.sprite.Sprite):
         self._tween_progress = 0
 
     def move_to(self, x, y, scale):
-        if not self._tween:
-            self._set_tween(left=x, top=y, scale=scale)
+        self._set_tween(left=x, top=y, scale=scale)
 
 
 class InventoryScreen:
@@ -201,6 +204,8 @@ class InventoryScreen:
 
     def handle_action(self, action):
         if action in DIRECTIONS:
+            if not self.pointer.can_move:
+                return
             grid, c, r = self.pointer_location
             if action == PlayerAction.up:
                 if r >= self.grids[grid].rows - 1:
