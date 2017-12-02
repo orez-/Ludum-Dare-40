@@ -85,7 +85,11 @@ class InventoryGrid:
         self.tile_size = tile_size
         self.scale = tile_size / ASSET_TILE_SIZE
         self.gap = tile_size / TILE_SIZE_GAP_RATIO
+        self.offset_x = offset_x
+        self.offset_y = offset_y
 
+        self.rows = rows
+        self.columns = columns
         self.tiles = {
             (x, y): InventoryTile(
                 x=x * (self.tile_size + self.gap) + offset_x,
@@ -100,13 +104,27 @@ class InventoryGrid:
         for tile in self.tiles.values():
             tile.draw()
 
+    def pointer_coord_at(self, row, col):
+        return (
+            col * (self.tile_size + self.gap) + self.offset_x,
+            row * (self.tile_size + self.gap) + self.offset_y,
+            self.scale,
+        )
+
 
 TWEEN_RATE = 5
 class Pointer(arcade.sprite.Sprite):
-    def __init__(self):
+    def __init__(self, left, top, scale):
         super().__init__()
+
+        self.scale = scale  # needs to happen before texture set.
+
         self.append_texture(TEXTURES['pointer'])
         self.set_texture(0)
+
+        # needs to happen after texture set.
+        self.left = left
+        self.top = top
 
         self._tween = {}
         self._tween_progress = 1
@@ -131,25 +149,9 @@ class Pointer(arcade.sprite.Sprite):
         }
         self._tween_progress = 0
 
-    def move_left(self):
-        if self._tween:
-            return
-        self._set_tween(left=self.left - 105)
-
-    def move_right(self):
-        if self._tween:
-            return
-        self._set_tween(left=self.left + 105)
-
-    def move_up(self):
-        if self._tween:
-            return
-        self._set_tween(top=self.top + 105)
-
-    def move_down(self):
-        if self._tween:
-            return
-        self._set_tween(top=self.top - 105)
+    def move_to(self, x, y, scale):
+        if not self._tween:
+            self._set_tween(left=x, top=y, scale=scale)
 
 
 class InventoryScreen:
@@ -168,11 +170,17 @@ class InventoryScreen:
             offset_x=750,
             offset_y=32 + 104,  # sorry
         )
+        self.grids = {
+            'inventory': self.inventory,
+            'workspace': self.workspace,
+        }
         self.items = [
             InventoryItem.get_grapple_hook(105 * 1.5, 105 * 1.5),
             InventoryItem.get_mushroom(105 * 3.5, 105 * 1.5),
         ]
-        self.pointer = Pointer()
+        self.pointer_location = ['inventory', 0, 0]
+        x, y, scale = self.inventory.pointer_coord_at(0, 0)
+        self.pointer = Pointer(left=x, top=y, scale=scale)
 
     def draw(self):
         arcade.draw_texture_rectangle(
@@ -192,14 +200,33 @@ class InventoryScreen:
         self.pointer.update(dt)
 
     def handle_action(self, action):
-        if action == PlayerAction.up:
-            self.pointer.move_up()
-        elif action == PlayerAction.down:
-            self.pointer.move_down()
-        elif action == PlayerAction.right:
-            self.pointer.move_right()
-        elif action == PlayerAction.left:
-            self.pointer.move_left()
+        if action in DIRECTIONS:
+            grid, c, r = self.pointer_location
+            if action == PlayerAction.up:
+                if r >= self.grids[grid].rows - 1:
+                    return
+                self.pointer_location[2] += 1
+            elif action == PlayerAction.down:
+                if r <= 0:
+                    return
+                self.pointer_location[2] -= 1
+            elif action == PlayerAction.right:
+                if c + 1 >= self.grids[grid].columns:
+                    if grid != 'inventory':
+                        return
+                    self.pointer_location = ['workspace', 0, 0]
+                else:
+                    self.pointer_location[1] += 1
+            elif action == PlayerAction.left:
+                if not c:
+                    if grid != 'workspace':
+                        return
+                    self.pointer_location = ['inventory', self.inventory.columns - 1, 0]
+                else:
+                    self.pointer_location[1] -= 1
+            grid, c, r = self.pointer_location
+            x, y, scale = self.grids[grid].pointer_coord_at(r, c)
+            self.pointer.move_to(x, y, scale)
 
 
 class PlayerAction(enum.Enum):
@@ -208,6 +235,14 @@ class PlayerAction(enum.Enum):
     left = 'left'
     up = 'up'
     select = 'select'
+
+
+DIRECTIONS = {
+    PlayerAction.right,
+    PlayerAction.down,
+    PlayerAction.left,
+    PlayerAction.up,
+}
 
 
 key_config = {
