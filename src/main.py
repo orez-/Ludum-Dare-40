@@ -103,6 +103,11 @@ class InventoryItem(TweenableSprite):
         self.shape = shape
         self.name = name
 
+        self.row = None
+        self.col = None
+        self.row_offset = 0
+        self.col_offset = 0
+
     @classmethod
     def get_item(cls, item_type, left, top, scale):
         shape, texture = ITEM_TYPES[item_type]
@@ -115,6 +120,10 @@ class InventoryItem(TweenableSprite):
             name=item_type,
             texture=texture,
         )
+
+    def item_coords(self):
+        for x, y in self.shape:
+            yield self.col + x, self.row - y
 
     def __repr__(self):
         return self.name
@@ -154,14 +163,23 @@ class InventoryGrid:
         self.contents = {}
 
     def place_item(self, item, row, col):
-        for x, y in item.shape:
-            assert 0 <= col + x < self.columns, (x, col)
-            assert 0 <= row - y < self.rows, (y, row)
-            assert not self.contents.get((col + x, row - y))
-            self.contents[col + x, row - y] = item
+        item.row = row - item.row_offset
+        item.col = col - item.col_offset
+        for x, y in item.item_coords():
+            assert 0 <= x < self.columns, x
+            assert 0 <= y < self.rows, y
+            assert not self.contents.get((x, y))
+            self.contents[x, y] = item
 
     def lift_item(self, row, col):
         item = self.contents[col, row]
+        for x, y in item.item_coords():
+            item_at = self.contents.pop((x, y))
+            assert item_at is item, item_at
+        item.row_offset = row - item.row
+        item.col_offset = col - item.col
+        item.row = None
+        item.col = None
         return item
 
     def draw(self):
@@ -278,8 +296,12 @@ class InventoryScreen:
             x, y, scale = self.grids[grid].pointer_coord_at(r, c)
             self.pointer.move_to(x, y, scale)
             if self.pointer.lifted_item:
-                x, y, scale = self.grids[grid].item_coord_at(r, c)
-                self.pointer.lifted_item.move_to(x, y, scale)
+                item = self.pointer.lifted_item
+                x, y, scale = self.grids[grid].item_coord_at(
+                    r - item.row_offset,
+                    c - item.col_offset,
+                )
+                item.move_to(x, y, scale)
         elif action == PlayerAction.select:
             grid, c, r = self.pointer_location
             if self.pointer.lifted_item:
