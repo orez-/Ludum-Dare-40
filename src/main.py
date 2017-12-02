@@ -15,6 +15,7 @@ TILE_SIZE_GAP_RATIO = 20
 TEXTURES = {
     'item_grapple_hook': arcade.load_texture('assets/grapplehook.png'),
     'item_mushroom': arcade.load_texture('assets/mushroom.png'),
+    'item_battleaxe': arcade.load_texture('assets/battleaxe.png'),
     'pointer': arcade.load_texture('assets/pointer.png'),
     'bg': arcade.load_texture('assets/bg.png'),
 }
@@ -47,6 +48,10 @@ ITEM_TYPES = {
         shape=[(0, 0), (1, 0), (2, 0), (1, 1), (1, 2)],
         texture=TEXTURES['item_mushroom'],
     ),
+    'battleaxe': ItemType(
+        shape=[(1, 0), (1, 1), (0, 1), (0, 2), (0, 3)],
+        texture=TEXTURES['item_battleaxe'],
+    ),
 }
 
 TWEEN_RATE = 5
@@ -60,6 +65,9 @@ class TweenableSprite(arcade.sprite.Sprite):
         # needs to happen after texture set.
         self.left = left
         self.top = top
+
+        self.offset_x = 0
+        self.offset_y = 0
 
         self._tween = {}
         self._tween_progress = 1
@@ -89,7 +97,11 @@ class TweenableSprite(arcade.sprite.Sprite):
         self._tween_progress = 0
 
     def move_to(self, x, y, scale):
-        self._set_tween(left=x, top=y, scale=scale)
+        self._set_tween(
+            left=x + self.offset_x,
+            top=y + self.offset_y,
+            scale=scale,
+        )
 
 
 class InventoryItem(TweenableSprite):
@@ -229,7 +241,8 @@ class InventoryScreen:
         # items
         self.items = []
         self.add_new_item('grapple_hook', 'inventory', 3, 0)
-        self.add_new_item('mushroom', 'inventory', 3, 2)
+        # self.add_new_item('mushroom', 'inventory', 3, 2)
+        self.add_new_item('battleaxe', 'inventory', 3, 3)
 
         # pointer
         self.pointer_location = ['inventory', 0, 0]
@@ -307,8 +320,22 @@ class InventoryScreen:
             if self.pointer.lifted_item:
                 self.grids[grid].place_item(self.pointer.lifted_item, r, c)
                 self.pointer.lifted_item = None
+                self.offset_x = 0
+                self.offset_y = 0
+                self.pointer.move_to(
+                    self.pointer.left,
+                    self.pointer.top,
+                    self.pointer.scale,
+                )
             else:
-                self.pointer.lifted_item = self.grids[grid].lift_item(r, c)
+                item = self.pointer.lifted_item = self.grids[grid].lift_item(r, c)
+                self.pointer.offset_x = item.center_x - self.pointer.left
+                self.pointer.offset_y = item.center_y - self.pointer.top
+                self.pointer.move_to(
+                    self.pointer.left,
+                    self.pointer.top,
+                    self.pointer.scale,
+                )
 
 
 class PlayerAction(enum.Enum):
