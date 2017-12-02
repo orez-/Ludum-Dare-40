@@ -15,6 +15,7 @@ TEXTURES = {
     'item_grapple_hook': arcade.load_texture('assets/grapplehook.png'),
     'item_mushroom': arcade.load_texture('assets/mushroom.png'),
     'pointer': arcade.load_texture('assets/pointer.png'),
+    'bg': arcade.load_texture('assets/bg.png'),
 }
 
 
@@ -158,6 +159,11 @@ class InventoryScreen:
         self.pointer = Pointer()
 
     def draw(self):
+        arcade.draw_texture_rectangle(
+            SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2,
+            SCREEN_WIDTH, SCREEN_HEIGHT, TEXTURES['bg'],
+        )
+
         for tile in self.tiles.values():
             tile.draw()
 
