@@ -1,3 +1,4 @@
+import collections
 import enum
 
 import arcade
@@ -36,8 +37,21 @@ class InventoryTile:
         )
 
 
+ItemType = collections.namedtuple('ItemType', 'shape texture')
+ITEM_TYPES = {
+    'grapple_hook': ItemType(
+        shape=[(1, 0), (0, 1), (1, 1), (2, 1), (2, 2)],
+        texture=TEXTURES['item_grapple_hook'],
+    ),
+    'mushroom': ItemType(
+        shape=[(0, 0), (1, 0), (2, 0), (1, 1), (1, 2)],
+        texture=TEXTURES['item_mushroom'],
+    ),
+}
+
+
 class InventoryItem(arcade.sprite.Sprite):
-    def __init__(self, *, shape, name, texture, **kwargs):
+    def __init__(self, *, shape, name, texture, left, top, **kwargs):
         super().__init__(**kwargs)
         self.shape = shape
         self.name = name
@@ -45,37 +59,20 @@ class InventoryItem(arcade.sprite.Sprite):
         self.append_texture(texture)
         self.set_texture(0)
 
-    @classmethod
-    def get_grapple_hook(cls, x, y):
-        return InventoryItem(
-            center_x=x,
-            center_y=y,
-            shape=[
-                (1, 0),
-                (0, 1),
-                (1, 1),
-                (2, 1),
-                (2, 2),
-            ],
-            name='grapple hook',
-            texture=TEXTURES['item_grapple_hook'],
-        )
-
+        self.left = left
+        self.top = top
 
     @classmethod
-    def get_mushroom(cls, x, y):
+    def get_item(cls, item_type, left, top, scale):
+        shape, texture = ITEM_TYPES[item_type]
+
         return InventoryItem(
-            center_x=x,
-            center_y=y,
-            shape=[
-                (0, 0),
-                (1, 0),
-                (2, 0),
-                (1, 1),
-                (1, 2),
-            ],
-            name='mushroom',
-            texture=TEXTURES['item_mushroom'],
+            left=left,
+            top=top,
+            shape=shape,
+            scale=scale,
+            name=item_type,
+            texture=texture,
         )
 
 
@@ -107,6 +104,16 @@ class InventoryGrid:
         return (
             int(col * (self.tile_size + self.gap) + self.offset_x),
             int(row * (self.tile_size + self.gap) + self.offset_y),
+            self.scale,
+        )
+
+    def item_coord_at(self, row, col):
+        """
+        Transform a row,col coord to screen x, y, and scale.
+        """
+        return (
+            int(col * (self.tile_size + self.gap) + self.offset_x - self.tile_size / 2 - self.gap),
+            int(row * (self.tile_size + self.gap) + self.offset_y + self.tile_size / 2 + self.gap),
             self.scale,
         )
 
@@ -158,6 +165,7 @@ class Pointer(arcade.sprite.Sprite):
 
 class InventoryScreen:
     def __init__(self):
+        # grids
         inventory = InventoryGrid(
             tile_size=100,
             rows=4,
@@ -176,13 +184,21 @@ class InventoryScreen:
             'inventory': inventory,
             'workspace': workspace,
         }
-        self.items = [
-            InventoryItem.get_grapple_hook(105 * 1.5, 105 * 1.5),
-            InventoryItem.get_mushroom(105 * 3.5, 105 * 1.5),
-        ]
+
+        # items
+        self.items = []
+        self.add_item('grapple_hook', 'inventory', 3, 0)
+        self.add_item('mushroom', 'inventory', 3, 2)
+
+        # pointer
         self.pointer_location = ['inventory', 0, 0]
         x, y, scale = inventory.pointer_coord_at(0, 0)
         self.pointer = Pointer(left=x, top=y, scale=scale)
+
+    def add_item(self, item, grid, row, col):
+        x, y, scale = self.grids[grid].item_coord_at(row, col)
+        item = InventoryItem.get_item(item, x, y, scale)
+        self.items.append(item)
 
     def draw(self):
         arcade.draw_texture_rectangle(
