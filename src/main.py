@@ -75,6 +75,9 @@ class InventoryItem(arcade.sprite.Sprite):
             texture=texture,
         )
 
+    def __repr__(self):
+        return self.name
+
 
 class InventoryGrid:
     def __init__(self, tile_size, rows, columns, offset_x, offset_y):
@@ -95,6 +98,14 @@ class InventoryGrid:
             for x in range(columns)
             for y in range(rows)
         }
+        self.contents = {}
+
+    def place_item(self, item, row, col):
+        for x, y in item.shape:
+            assert 0 <= col + x < self.columns, (x, col)
+            assert 0 <= row - y < self.rows, (y, row)
+            assert not self.contents.get((col + x, row - y))
+            self.contents[col + x, row - y] = item
 
     def draw(self):
         for tile in self.tiles.values():
@@ -195,10 +206,12 @@ class InventoryScreen:
         x, y, scale = inventory.pointer_coord_at(0, 0)
         self.pointer = Pointer(left=x, top=y, scale=scale)
 
-    def add_item(self, item, grid, row, col):
-        x, y, scale = self.grids[grid].item_coord_at(row, col)
+    def add_item(self, item, grid_name, row, col):
+        grid = self.grids[grid_name]
+        x, y, scale = grid.item_coord_at(row, col)
         item = InventoryItem.get_item(item, x, y, scale)
         self.items.append(item)
+        grid.place_item(item, row, col)
 
     def draw(self):
         arcade.draw_texture_rectangle(
