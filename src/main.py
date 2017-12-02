@@ -7,8 +7,8 @@ import attr
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
 
-TILE_SIZE = 100
-TILE_GAP = 5
+ASSET_TILE_SIZE = 100  # size of a tile as expected by assets
+TILE_SIZE_GAP_RATIO = 20
 
 
 TEXTURES = {
@@ -23,7 +23,7 @@ TEXTURES = {
 class InventoryTile:
     x = attr.ib()
     y = attr.ib()
-    size = attr.ib(default=TILE_SIZE)
+    size = attr.ib()
 
     def draw(self):
         """ Draw our rectangle """
@@ -80,6 +80,27 @@ class InventoryItem(arcade.sprite.Sprite):
         return ii
 
 
+class InventoryGrid:
+    def __init__(self, tile_size, rows, columns, offset_x, offset_y):
+        self.tile_size = tile_size
+        self.scale = tile_size / ASSET_TILE_SIZE
+        self.gap = tile_size / TILE_SIZE_GAP_RATIO
+
+        self.tiles = {
+            (x, y): InventoryTile(
+                x=x * (self.tile_size + self.gap) + offset_x,
+                y=y * (self.tile_size + self.gap) + offset_y,
+                size=self.tile_size,
+            )
+            for x in range(columns)
+            for y in range(rows)
+        }
+
+    def draw(self):
+        for tile in self.tiles.values():
+            tile.draw()
+
+
 TWEEN_RATE = 5
 class Pointer(arcade.sprite.Sprite):
     def __init__(self):
@@ -134,24 +155,20 @@ class InventoryScreen:
     def __init__(self):
         offset_x = 55
         offset_y = 55
-        self.tiles = {
-            ('inventory', x, y): InventoryTile(
-                x=x * (TILE_SIZE + TILE_GAP) + offset_x,
-                y=y * (TILE_SIZE + TILE_GAP) + offset_y,
-            )
-            for x in range(5)
-            for y in range(4)
-        }
-        workspace_tile_size = 50
-        self.tiles.update({
-            ('workspace', x, y): InventoryTile(
-                x=x * (workspace_tile_size + 2.5) + 700,
-                y=y * (workspace_tile_size + 2.5) + 32,
-                size=workspace_tile_size,
-            )
-            for x in range(5)
-            for y in range(10)
-        })
+        self.inventory = InventoryGrid(
+            tile_size=100,
+            rows=4,
+            columns=5,
+            offset_x=55,
+            offset_y=55,
+        )
+        self.workspace = InventoryGrid(
+            tile_size=50,
+            rows=10,
+            columns=5,
+            offset_x=750,
+            offset_y=32 + 104,  # sorry
+        )
         self.items = [
             InventoryItem.get_grapple_hook(105 * 1.5, 105 * 1.5),
             InventoryItem.get_mushroom(105 * 3.5, 105 * 1.5),
@@ -164,8 +181,8 @@ class InventoryScreen:
             SCREEN_WIDTH, SCREEN_HEIGHT, TEXTURES['bg'],
         )
 
-        for tile in self.tiles.values():
-            tile.draw()
+        self.inventory.draw()
+        self.workspace.draw()
 
         for item in self.items:
             item.draw()
