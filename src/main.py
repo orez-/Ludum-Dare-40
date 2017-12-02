@@ -127,6 +127,7 @@ class Pointer(arcade.sprite.Sprite):
         self._tween = {
             key: (getattr(self, key), value)
             for key, value in properties.items()
+            if getattr(self, key) != value
         }
         self._tween_progress = 0
 
@@ -153,14 +154,12 @@ class Pointer(arcade.sprite.Sprite):
 
 class InventoryScreen:
     def __init__(self):
-        offset_x = 55
-        offset_y = 55
         self.inventory = InventoryGrid(
             tile_size=100,
             rows=4,
             columns=5,
-            offset_x=55,
-            offset_y=55,
+            offset_x=55 + 60,  # arbitrary
+            offset_y=210,  # arbitrary
         )
         self.workspace = InventoryGrid(
             tile_size=50,
