@@ -8,41 +8,74 @@ SCREEN_HEIGHT = 768
 TILE_SIZE = 100
 TILE_GAP = 5
 
+
+TEXTURES = {
+    'item_shape': arcade.load_texture('assets/shape.png'),
+}
+
+
 @attr.s(slots=True)
 class InventoryTile:
     x = attr.ib()
     y = attr.ib()
-    width = attr.ib(default=TILE_SIZE)
-    height = attr.ib(default=TILE_SIZE)
-    # angle = attr.ib()
+    size = attr.ib(default=TILE_SIZE)
 
     def draw(self):
         """ Draw our rectangle """
-        # centers at x, y o_O
         arcade.draw_rectangle_filled(
-            self.x,
-            self.y,
-            self.width,
-            self.height,
-            # self.color,
+            center_x=self.x,
+            center_y=self.y,
+            width=self.size,
+            height=self.size,
             color='CCCCCC',
         )
 
 
+class InventoryItem(arcade.sprite.Sprite):
+    def __init__(self, *, shape, **kwargs):
+        super().__init__(**kwargs)
+        self.shape = shape
+
+    @classmethod
+    def get_thing(cls, x, y):
+        ii = InventoryItem(
+            center_x=x,
+            center_y=y,
+            shape=[
+                (1, 0),
+                (0, 1),
+                (1, 1),
+                (2, 1),
+                (2, 2),
+            ],
+        )
+        ii.append_texture(TEXTURES['item_shape'])
+        ii.set_texture(0)
+        return ii
+
+
 class InventoryScreen:
     def __init__(self):
+        offset_x = 55
+        offset_y = 55
         self.tiles = {
             (x, y): InventoryTile(
-                x=x * (TILE_SIZE + TILE_GAP),
-                y=y * (TILE_SIZE + TILE_GAP),
+                x=x * (TILE_SIZE + TILE_GAP) + offset_x,
+                y=y * (TILE_SIZE + TILE_GAP) + offset_y,
             )
             for x in range(5)
             for y in range(4)
         }
+        self.items = [
+            InventoryItem.get_thing(300, 300),
+        ]
 
     def draw(self):
         for tile in self.tiles.values():
             tile.draw()
+
+        for item in self.items:
+            item.draw()
 
 
 class MyApplication(arcade.Window):
