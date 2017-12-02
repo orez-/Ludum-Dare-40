@@ -37,14 +37,17 @@ class InventoryTile:
 
 
 class InventoryItem(arcade.sprite.Sprite):
-    def __init__(self, *, shape, name, **kwargs):
+    def __init__(self, *, shape, name, texture, **kwargs):
         super().__init__(**kwargs)
         self.shape = shape
         self.name = name
 
+        self.append_texture(texture)
+        self.set_texture(0)
+
     @classmethod
     def get_grapple_hook(cls, x, y):
-        ii = InventoryItem(
+        return InventoryItem(
             center_x=x,
             center_y=y,
             shape=[
@@ -55,15 +58,13 @@ class InventoryItem(arcade.sprite.Sprite):
                 (2, 2),
             ],
             name='grapple hook',
+            texture=TEXTURES['item_grapple_hook'],
         )
-        ii.append_texture(TEXTURES['item_grapple_hook'])
-        ii.set_texture(0)
-        return ii
 
 
     @classmethod
     def get_mushroom(cls, x, y):
-        ii = InventoryItem(
+        return InventoryItem(
             center_x=x,
             center_y=y,
             shape=[
@@ -74,10 +75,8 @@ class InventoryItem(arcade.sprite.Sprite):
                 (1, 2),
             ],
             name='mushroom',
+            texture=TEXTURES['item_mushroom'],
         )
-        ii.append_texture(TEXTURES['item_mushroom'])
-        ii.set_texture(0)
-        return ii
 
 
 class InventoryGrid:
@@ -106,8 +105,8 @@ class InventoryGrid:
 
     def pointer_coord_at(self, row, col):
         return (
-            col * (self.tile_size + self.gap) + self.offset_x,
-            row * (self.tile_size + self.gap) + self.offset_y,
+            int(col * (self.tile_size + self.gap) + self.offset_x),
+            int(row * (self.tile_size + self.gap) + self.offset_y),
             self.scale,
         )
 
@@ -159,14 +158,14 @@ class Pointer(arcade.sprite.Sprite):
 
 class InventoryScreen:
     def __init__(self):
-        self.inventory = InventoryGrid(
+        inventory = InventoryGrid(
             tile_size=100,
             rows=4,
             columns=5,
             offset_x=55 + 60,  # arbitrary
             offset_y=210,  # arbitrary
         )
-        self.workspace = InventoryGrid(
+        workspace = InventoryGrid(
             tile_size=50,
             rows=10,
             columns=5,
@@ -174,15 +173,15 @@ class InventoryScreen:
             offset_y=32 + 104,  # sorry
         )
         self.grids = {
-            'inventory': self.inventory,
-            'workspace': self.workspace,
+            'inventory': inventory,
+            'workspace': workspace,
         }
         self.items = [
             InventoryItem.get_grapple_hook(105 * 1.5, 105 * 1.5),
             InventoryItem.get_mushroom(105 * 3.5, 105 * 1.5),
         ]
         self.pointer_location = ['inventory', 0, 0]
-        x, y, scale = self.inventory.pointer_coord_at(0, 0)
+        x, y, scale = inventory.pointer_coord_at(0, 0)
         self.pointer = Pointer(left=x, top=y, scale=scale)
 
     def draw(self):
@@ -191,8 +190,8 @@ class InventoryScreen:
             SCREEN_WIDTH, SCREEN_HEIGHT, TEXTURES['bg'],
         )
 
-        self.inventory.draw()
-        self.workspace.draw()
+        for grid in self.grids.values():
+            grid.draw()
 
         for item in self.items:
             item.draw()
@@ -226,7 +225,7 @@ class InventoryScreen:
                 if not c:
                     if grid != 'workspace':
                         return
-                    self.pointer_location = ['inventory', self.inventory.columns - 1, 0]
+                    self.pointer_location = ['inventory', self.grids['inventory'].columns - 1, 0]
                 else:
                     self.pointer_location[1] -= 1
             grid, c, r = self.pointer_location
