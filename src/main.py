@@ -167,23 +167,27 @@ class InventoryItem(TweenableSprite):
         rounding = 0
         left = self.left
         top = self.top
-        if self.center_row % 1 != self.center_col % 1:
-            rounding = 0.5
+        # if self.center_row % 1 != self.center_col % 1:
+        #     rounding = 0.5
         self.shape = [
             (
-                int(y - self.center_row + self.center_col + rounding),
-                int(self.center_col - x + self.center_row + rounding),
+                y - self.center_row + self.center_col + rounding,
+                self.center_col - x + self.center_row + rounding,
             )
             for x, y in self.shape
         ]
-        print(self.shape)
         self._set_tween(
             angle=self.angle + 90,
-            # left=self.left,
-            # top=self.top,
+            left=left,
+            top=top,
         )
 
     def rotate_right(self):
+        rounding = 0
+        left = self.left
+        top = self.top
+        # if self.center_row % 1 != self.center_col % 1:
+        #     rounding = 0.5
         self.shape = [
             (
                 self.center_row - y + self.center_col,
@@ -337,7 +341,7 @@ class InventoryScreen:
         # items
         self.items = []
         # self.add_new_item('grapple_hook', 'inventory', 3, 0)
-        # self.add_new_item('gascan', 'inventory', 3, 0)
+        self.add_new_item('gascan', 'inventory', 3, 0)
         # self.add_new_item('mushroom', 'inventory', 3, 2)
         self.add_new_item('battleaxe', 'inventory', 3, 3)
 
@@ -384,18 +388,18 @@ class InventoryScreen:
                 return
             self.pointer_location[2] += 1
         elif action == PlayerAction.down:
-            if r <= 0:
+            if r < 1:
                 return
             self.pointer_location[2] -= 1
         elif action == PlayerAction.right:
-            if c + 1 >= self.grids[grid].columns:
+            if c + 2 > self.grids[grid].columns:
                 if grid != 'inventory':
                     return
                 self.pointer_location = ['workspace', 0, 0]
             else:
                 self.pointer_location[1] += 1
         elif action == PlayerAction.left:
-            if not c:
+            if c < 1:
                 if grid != 'workspace':
                     return
                 self.pointer_location = ['inventory', self.grids['inventory'].columns - 1, 0]
@@ -412,7 +416,7 @@ class InventoryScreen:
             cc = item.center_col
             print(item.angle)
             if item.angle in {90, 270}:
-                cr = -item.center_col
+                cr = item.center_col
                 cc = item.center_row
             x, y, scale = grid.item_coord_at(
                 r + cr,
@@ -455,7 +459,7 @@ class InventoryScreen:
             item = self.pointer.lifted_item
             if item:
                 item.rotate_left()
-                print(item.row, item.center_row)
+                print("!", item.center_row, item.center_col)
                 # self.set_pointer_loc(
                 #     item.row - item.center_row,
                 #     item.col + item.center_col,
