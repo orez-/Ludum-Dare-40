@@ -14,12 +14,19 @@ ASSET_TILE_TOTAL = ASSET_TILE_SIZE + ASSET_TILE_SIZE / TILE_SIZE_GAP_RATIO
 
 
 TEXTURES = {
-    'item_grapple_hook': arcade.load_texture('assets/grapplehook.png'),
-    'item_mushroom': arcade.load_texture('assets/mushroom.png'),
-    'item_battleaxe': arcade.load_texture('assets/battleaxe.png'),
-    'item_gascan': arcade.load_texture('assets/gascan.png'),
-    'pointer': arcade.load_texture('assets/pointer.png'),
-    'bg': arcade.load_texture('assets/bg.png'),
+    'item_grapple_hook': [arcade.load_texture('assets/grapplehook.png')],
+    'item_mushroom': [arcade.load_texture('assets/mushroom.png')],
+    'item_battleaxe': [arcade.load_texture('assets/battleaxe.png')],
+    'item_gascan': [arcade.load_texture('assets/gascan.png')],
+    'pointer': arcade.load_textures(
+        'assets/pointer.png',
+        [
+            (0, 0, 64, 64),
+            (64, 0, 64, 64),
+            (128, 0, 64, 64),
+        ],
+    ),
+    'bg': [arcade.load_texture('assets/bg.png')],
 }
 
 
@@ -40,33 +47,34 @@ class InventoryTile:
         )
 
 
-ItemType = collections.namedtuple('ItemType', 'shape texture')
+ItemType = collections.namedtuple('ItemType', 'shape textures')
 ITEM_TYPES = {
     'grapple_hook': ItemType(
         shape=[(1, 0), (0, 1), (1, 1), (2, 1), (2, 2)],
-        texture=TEXTURES['item_grapple_hook'],
+        textures=TEXTURES['item_grapple_hook'],
     ),
     'mushroom': ItemType(
         shape=[(0, 0), (1, 0), (2, 0), (1, 1), (1, 2)],
-        texture=TEXTURES['item_mushroom'],
+        textures=TEXTURES['item_mushroom'],
     ),
     'battleaxe': ItemType(
         shape=[(1, 0), (1, 1), (0, 1), (0, 2), (0, 3)],
-        texture=TEXTURES['item_battleaxe'],
+        textures=TEXTURES['item_battleaxe'],
     ),
     'gascan': ItemType(
         shape=[(1, 0), (1, 1), (0, 1), (0, 2), (1, 2)],
-        texture=TEXTURES['item_gascan'],
+        textures=TEXTURES['item_gascan'],
     ),
 }
 
 TWEEN_RATE = 5
 class TweenableSprite(arcade.sprite.Sprite):
-    def __init__(self, scale, left, top, texture):
+    def __init__(self, scale, left, top, textures):
         super().__init__(scale=scale)
 
-        self.append_texture(texture)
-        self.set_texture(0)
+        self._frame = 0
+        self.textures = textures
+        self.set_texture(self._frame)
 
         # needs to happen after texture set.
         self.left = left
@@ -90,7 +98,7 @@ class TweenableSprite(arcade.sprite.Sprite):
             setattr(self, key, (end - start) * self._tween_progress + start)
         # need to force rescale :\
         if 'scale' in self._tween:
-            self.set_texture(0)
+            self.set_texture(self._frame)
         if self._tween_progress == 1:
             self._tween = {}
 
@@ -122,12 +130,12 @@ class TweenableSprite(arcade.sprite.Sprite):
 
 
 class InventoryItem(TweenableSprite):
-    def __init__(self, *, shape, name, texture, left, top, scale):
+    def __init__(self, *, shape, name, textures, left, top, scale):
         super().__init__(
             scale=scale,
             left=left,
             top=top,
-            texture=texture,
+            textures=textures,
         )
         self.shape = list(shape)
         self.center_row = max(y for _, y in self.shape) / 2
@@ -141,7 +149,7 @@ class InventoryItem(TweenableSprite):
 
     @classmethod
     def get_item(cls, item_type, left, top, scale):
-        shape, texture = ITEM_TYPES[item_type]
+        shape, textures = ITEM_TYPES[item_type]
 
         return InventoryItem(
             left=left,
@@ -149,7 +157,7 @@ class InventoryItem(TweenableSprite):
             shape=shape,
             scale=scale,
             name=item_type,
-            texture=texture,
+            textures=textures,
         )
 
     def item_coords(self):
@@ -186,10 +194,22 @@ class Pointer(TweenableSprite):
             scale=scale,
             left=left,
             top=top,
-            texture=TEXTURES['pointer'],
+            textures=TEXTURES['pointer'],
         )
 
         self.lifted_item = None
+
+    def point_hand(self):
+        self._frame = 0
+        self.set_texture(self._frame)
+
+    def open_hand(self):
+        self._frame = 1
+        self.set_texture(self._frame)
+
+    def grab_hand(self):
+        self._frame = 2
+        self.set_texture(self._frame)
 
 
 class InventoryGrid:
@@ -241,6 +261,9 @@ class InventoryGrid:
         item.row = None
         item.col = None
         return item
+
+    def get_item(self, row, col):
+        return self.contents.get((col, row))
 
     def draw(self):
         for tile in self.tiles.values():
@@ -325,7 +348,7 @@ class InventoryScreen:
     def draw(self):
         arcade.draw_texture_rectangle(
             SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2,
-            SCREEN_WIDTH, SCREEN_HEIGHT, TEXTURES['bg'],
+            SCREEN_WIDTH, SCREEN_HEIGHT, TEXTURES['bg'][0],
         )
 
         for grid in self.grids.values():
@@ -367,30 +390,41 @@ class InventoryScreen:
                 self.pointer_location = ['inventory', self.grids['inventory'].columns - 1, 0]
             else:
                 self.pointer_location[1] -= 1
-        grid, c, r = self.pointer_location
-        x, y, scale = self.grids[grid].pointer_coord_at(r, c)
+        grid_name, c, r = self.pointer_location
+        grid = self.grids[grid_name]
+        x, y, scale = grid.pointer_coord_at(r, c)
         self.pointer.move_to(x, y, scale)
         if self.pointer.lifted_item:
             item = self.pointer.lifted_item
-            x, y, scale = self.grids[grid].item_coord_at(
+            x, y, scale = grid.item_coord_at(
                 r - item.row_offset,
                 c - item.col_offset,
             )
             item.move_to(x, y, scale)
+        elif grid.get_item(r, c):
+            self.pointer.open_hand()
+        else:
+            self.pointer.point_hand()
 
     def handle_action(self, action):
         if action in DIRECTIONS:
             self._handle_move(action)
         elif action == PlayerAction.select:
-            grid, c, r = self.pointer_location
+            grid_name, c, r = self.pointer_location
+            grid = self.grids[grid_name]
             if self.pointer.lifted_item:
-                placed = self.grids[grid].place_item(self.pointer.lifted_item, r, c)
+                placed = grid.place_item(self.pointer.lifted_item, r, c)
                 if placed:
+                    if grid.get_item(r, c):
+                        self.pointer.open_hand()
+                    else:
+                        self.pointer.point_hand()
                     self.pointer.lifted_item = None
                     self.pointer.set_offset(0, 0)
             else:
-                item = self.pointer.lifted_item = self.grids[grid].lift_item(r, c)
+                item = self.pointer.lifted_item = grid.lift_item(r, c)
                 if item:
+                    self.pointer.grab_hand()
                     # Fix draw order.
                     self.items.remove(item)
                     self.items.append(item)
