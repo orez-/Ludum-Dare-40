@@ -10,12 +10,14 @@ SCREEN_HEIGHT = 768
 
 ASSET_TILE_SIZE = 100  # size of a tile as expected by assets
 TILE_SIZE_GAP_RATIO = 20
+ASSET_TILE_TOTAL = ASSET_TILE_SIZE + ASSET_TILE_SIZE / TILE_SIZE_GAP_RATIO
 
 
 TEXTURES = {
     'item_grapple_hook': arcade.load_texture('assets/grapplehook.png'),
     'item_mushroom': arcade.load_texture('assets/mushroom.png'),
     'item_battleaxe': arcade.load_texture('assets/battleaxe.png'),
+    'item_gascan': arcade.load_texture('assets/gascan.png'),
     'pointer': arcade.load_texture('assets/pointer.png'),
     'bg': arcade.load_texture('assets/bg.png'),
 }
@@ -51,6 +53,10 @@ ITEM_TYPES = {
     'battleaxe': ItemType(
         shape=[(1, 0), (1, 1), (0, 1), (0, 2), (0, 3)],
         texture=TEXTURES['item_battleaxe'],
+    ),
+    'gascan': ItemType(
+        shape=[(1, 0), (1, 1), (0, 1), (0, 2), (1, 2)],
+        texture=TEXTURES['item_gascan'],
     ),
 }
 
@@ -96,10 +102,21 @@ class TweenableSprite(arcade.sprite.Sprite):
         }
         self._tween_progress = 0
 
+    def set_offset(self, x, y):
+        old_x = self.offset_x * self.scale
+        old_y = self.offset_y * self.scale
+        self.offset_x = x
+        self.offset_y = y
+        self.move_to(
+            self.left - old_x,
+            self.top - old_y,
+            self.scale,
+        )
+
     def move_to(self, x, y, scale):
         self._set_tween(
-            left=x + self.offset_x,
-            top=y + self.offset_y,
+            left=x + self.offset_x * scale,
+            top=y + self.offset_y * scale,
             scale=scale,
         )
 
@@ -112,7 +129,9 @@ class InventoryItem(TweenableSprite):
             top=top,
             texture=texture,
         )
-        self.shape = shape
+        self.shape = list(shape)
+        self.center_row = max(y for _, y in self.shape) / 2
+        self.center_col = max(x for x, _ in self.shape) / 2
         self.name = name
 
         self.row = None
@@ -136,6 +155,26 @@ class InventoryItem(TweenableSprite):
     def item_coords(self):
         for x, y in self.shape:
             yield self.col + x, self.row - y
+
+    def rotate_left(self):
+        self.shape = [
+            (
+                y - self.center_row + self.center_col,
+                self.center_col - x + self.center_row,
+            )
+            for x, y in self.shape
+        ]
+        self._set_tween(angle=self.angle + 90)
+
+    def rotate_right(self):
+        self.shape = [
+            (
+                self.center_row - y + self.center_col,
+                x - self.center_col + self.center_row,
+            )
+            for x, y in self.shape
+        ]
+        self._set_tween(angle=self.angle - 90)
 
     def __repr__(self):
         return self.name
@@ -177,14 +216,23 @@ class InventoryGrid:
     def place_item(self, item, row, col):
         item.row = row - item.row_offset
         item.col = col - item.col_offset
+        safe = all(
+            0 <= x < self.columns and
+            0 <= y < self.rows and
+            not self.contents.get((x, y))
+            for x, y in item.item_coords()
+        )
+        if not safe:
+            return False
         for x, y in item.item_coords():
-            assert 0 <= x < self.columns, x
-            assert 0 <= y < self.rows, y
-            assert not self.contents.get((x, y))
             self.contents[x, y] = item
+        self.print_grid()
+        return True
 
     def lift_item(self, row, col):
-        item = self.contents[col, row]
+        item = self.contents.get((col, row))
+        if not item:
+            return None
         for x, y in item.item_coords():
             item_at = self.contents.pop((x, y))
             assert item_at is item, item_at
@@ -215,8 +263,22 @@ class InventoryGrid:
             self.scale,
         )
 
+    def print_grid(self):
+        for y in range(self.rows):
+            for x in range(self.columns):
+                item = self.contents.get((x, y))
+                if not item:
+                    print(end='-')
+                else:
+                    print(end=item.name[0])
+            print()
+        print()
+
 
 class InventoryScreen:
+    """
+    Main UI controller for inventory game.
+    """
     def __init__(self):
         # grids
         inventory = InventoryGrid(
@@ -240,7 +302,8 @@ class InventoryScreen:
 
         # items
         self.items = []
-        self.add_new_item('grapple_hook', 'inventory', 3, 0)
+        # self.add_new_item('grapple_hook', 'inventory', 3, 0)
+        self.add_new_item('gascan', 'inventory', 3, 0)
         # self.add_new_item('mushroom', 'inventory', 3, 2)
         self.add_new_item('battleaxe', 'inventory', 3, 3)
 
@@ -278,64 +341,71 @@ class InventoryScreen:
         for item in self.items:
             item.update(dt)
 
+    def _handle_move(self, action):
+        if not self.pointer.can_move:
+            return
+        grid, c, r = self.pointer_location
+        if action == PlayerAction.up:
+            if r >= self.grids[grid].rows - 1:
+                return
+            self.pointer_location[2] += 1
+        elif action == PlayerAction.down:
+            if r <= 0:
+                return
+            self.pointer_location[2] -= 1
+        elif action == PlayerAction.right:
+            if c + 1 >= self.grids[grid].columns:
+                if grid != 'inventory':
+                    return
+                self.pointer_location = ['workspace', 0, 0]
+            else:
+                self.pointer_location[1] += 1
+        elif action == PlayerAction.left:
+            if not c:
+                if grid != 'workspace':
+                    return
+                self.pointer_location = ['inventory', self.grids['inventory'].columns - 1, 0]
+            else:
+                self.pointer_location[1] -= 1
+        grid, c, r = self.pointer_location
+        x, y, scale = self.grids[grid].pointer_coord_at(r, c)
+        self.pointer.move_to(x, y, scale)
+        if self.pointer.lifted_item:
+            item = self.pointer.lifted_item
+            x, y, scale = self.grids[grid].item_coord_at(
+                r - item.row_offset,
+                c - item.col_offset,
+            )
+            item.move_to(x, y, scale)
+
     def handle_action(self, action):
         if action in DIRECTIONS:
-            if not self.pointer.can_move:
-                return
-            grid, c, r = self.pointer_location
-            if action == PlayerAction.up:
-                if r >= self.grids[grid].rows - 1:
-                    return
-                self.pointer_location[2] += 1
-            elif action == PlayerAction.down:
-                if r <= 0:
-                    return
-                self.pointer_location[2] -= 1
-            elif action == PlayerAction.right:
-                if c + 1 >= self.grids[grid].columns:
-                    if grid != 'inventory':
-                        return
-                    self.pointer_location = ['workspace', 0, 0]
-                else:
-                    self.pointer_location[1] += 1
-            elif action == PlayerAction.left:
-                if not c:
-                    if grid != 'workspace':
-                        return
-                    self.pointer_location = ['inventory', self.grids['inventory'].columns - 1, 0]
-                else:
-                    self.pointer_location[1] -= 1
-            grid, c, r = self.pointer_location
-            x, y, scale = self.grids[grid].pointer_coord_at(r, c)
-            self.pointer.move_to(x, y, scale)
-            if self.pointer.lifted_item:
-                item = self.pointer.lifted_item
-                x, y, scale = self.grids[grid].item_coord_at(
-                    r - item.row_offset,
-                    c - item.col_offset,
-                )
-                item.move_to(x, y, scale)
+            self._handle_move(action)
         elif action == PlayerAction.select:
             grid, c, r = self.pointer_location
             if self.pointer.lifted_item:
-                self.grids[grid].place_item(self.pointer.lifted_item, r, c)
-                self.pointer.lifted_item = None
-                self.offset_x = 0
-                self.offset_y = 0
-                self.pointer.move_to(
-                    self.pointer.left,
-                    self.pointer.top,
-                    self.pointer.scale,
-                )
+                placed = self.grids[grid].place_item(self.pointer.lifted_item, r, c)
+                if placed:
+                    self.pointer.lifted_item = None
+                    self.pointer.set_offset(0, 0)
             else:
                 item = self.pointer.lifted_item = self.grids[grid].lift_item(r, c)
-                self.pointer.offset_x = item.center_x - self.pointer.left
-                self.pointer.offset_y = item.center_y - self.pointer.top
-                self.pointer.move_to(
-                    self.pointer.left,
-                    self.pointer.top,
-                    self.pointer.scale,
-                )
+                if item:
+                    # Fix draw order.
+                    self.items.remove(item)
+                    self.items.append(item)
+                    self.pointer.set_offset(
+                        ASSET_TILE_TOTAL * (item.center_col - item.col_offset),
+                        -ASSET_TILE_TOTAL * (item.center_row + item.row_offset),
+                    )
+        elif action == PlayerAction.rotate_left:
+            item = self.pointer.lifted_item
+            if item:
+                item.rotate_left()
+        elif action == PlayerAction.rotate_right:
+            item = self.pointer.lifted_item
+            if item:
+                item.rotate_right()
 
 
 class PlayerAction(enum.Enum):
@@ -344,6 +414,8 @@ class PlayerAction(enum.Enum):
     left = 'left'
     up = 'up'
     select = 'select'
+    rotate_left = 'rotate_left'
+    rotate_right = 'rotate_right'
 
 
 DIRECTIONS = {
@@ -365,6 +437,8 @@ key_config = {
     arcade.key.W: PlayerAction.up,
     arcade.key.S: PlayerAction.down,
     arcade.key.SPACE: PlayerAction.select,
+    arcade.key.BRACKETLEFT: PlayerAction.rotate_left,
+    arcade.key.BRACKETRIGHT: PlayerAction.rotate_right,
 }
 
 
