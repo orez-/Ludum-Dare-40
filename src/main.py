@@ -14,10 +14,19 @@ ASSET_TILE_TOTAL = ASSET_TILE_SIZE + ASSET_TILE_SIZE / TILE_SIZE_GAP_RATIO
 
 
 TEXTURES = {
-    'item_grapple_hook': [arcade.load_texture('assets/grapplehook.png')],
+    'item_grapple_hook': [
+        arcade.load_texture('assets/grapplehook.png'),
+        arcade.load_texture('assets/grapplehook.png', mirrored=True),
+    ],
     'item_mushroom': [arcade.load_texture('assets/mushroom.png')],
-    'item_battleaxe': [arcade.load_texture('assets/battleaxe.png')],
-    'item_gascan': [arcade.load_texture('assets/gascan.png')],
+    'item_battleaxe': [
+        arcade.load_texture('assets/battleaxe.png'),
+        arcade.load_texture('assets/battleaxe.png', mirrored=True),
+    ],
+    'item_gascan': [
+        arcade.load_texture('assets/gascan.png'),
+        arcade.load_texture('assets/gascan.png', mirrored=True),
+    ],
     'pointer': arcade.load_textures(
         'assets/pointer.png',
         [
@@ -47,23 +56,27 @@ class InventoryTile:
         )
 
 
-ItemType = collections.namedtuple('ItemType', 'shape textures')
+ItemType = collections.namedtuple('ItemType', 'shape textures symmetrical')
 ITEM_TYPES = {
     'grapple_hook': ItemType(
         shape=[(1, 0), (0, 1), (1, 1), (2, 1), (2, 2)],
         textures=TEXTURES['item_grapple_hook'],
+        symmetrical=False,
     ),
     'mushroom': ItemType(
         shape=[(0, 0), (1, 0), (2, 0), (1, 1), (1, 2)],
         textures=TEXTURES['item_mushroom'],
+        symmetrical=True,
     ),
     'battleaxe': ItemType(
         shape=[(1, 0), (1, 1), (0, 1), (0, 2), (0, 3)],
         textures=TEXTURES['item_battleaxe'],
+        symmetrical=False,
     ),
     'gascan': ItemType(
         shape=[(1, 0), (1, 1), (0, 1), (0, 2), (1, 2)],
         textures=TEXTURES['item_gascan'],
+        symmetrical=False,
     ),
 }
 
@@ -111,7 +124,7 @@ class TweenableSprite(arcade.sprite.Sprite):
 
 
 class InventoryItem(TweenableSprite):
-    def __init__(self, *, shape, name, textures, left, top, scale):
+    def __init__(self, *, shape, name, textures, left, top, scale, symmetrical):
         super().__init__(
             scale=scale,
             left=left,
@@ -122,6 +135,7 @@ class InventoryItem(TweenableSprite):
         self.center_row = max(y for _, y in self.shape) / 2
         self.center_col = max(x for x, _ in self.shape) / 2
         self.name = name
+        self.symmetrical = symmetrical
 
         self.row = None
         self.col = None
@@ -129,7 +143,7 @@ class InventoryItem(TweenableSprite):
 
     @classmethod
     def get_item(cls, item_type, left, top, scale):
-        shape, textures = ITEM_TYPES[item_type]
+        shape, textures, symmetrical = ITEM_TYPES[item_type]
 
         return InventoryItem(
             left=left,
@@ -138,6 +152,7 @@ class InventoryItem(TweenableSprite):
             scale=scale,
             name=item_type,
             textures=textures,
+            symmetrical=symmetrical,
         )
 
     def item_coords(self):
@@ -157,6 +172,7 @@ class InventoryItem(TweenableSprite):
             center_x=cx,
             center_y=cy,
         )
+        self.rotation = (self.rotation + 1) % 4
 
     def rotate_right(self, cx, cy):
         self.shape = [
@@ -171,6 +187,20 @@ class InventoryItem(TweenableSprite):
             center_x=cx,
             center_y=cy,
         )
+        self.rotation = (self.rotation - 1) % 4
+
+    def flip(self):
+        if self.symmetrical:
+            return
+        self.shape = [
+            (
+                2 * self.center_col - x if self.rotation % 2 == 0 else x,
+                2 * self.center_row - y if self.rotation % 2 == 1 else y,
+            )
+            for x, y in self.shape
+        ]
+        self._frame = not self._frame
+        self.set_texture(self._frame)
 
     def __repr__(self):
         return self.name
@@ -466,6 +496,10 @@ class InventoryScreen:
                     r, c = self.set_pointer_loc(r - 0.5, c + 0.5)
                 x, y, _ = grid.pointer_coord_at(r, c)
                 item.rotate_right(x, y)
+        elif action == PlayerAction.flip:
+            item = self.pointer.lifted_item
+            if item:
+                item.flip()
 
     def set_pointer_loc(self, row, col, grid_name=None):
         if not grid_name:
@@ -485,6 +519,7 @@ class PlayerAction(enum.Enum):
     select = 'select'
     rotate_left = 'rotate_left'
     rotate_right = 'rotate_right'
+    flip = 'flip'
 
 
 DIRECTIONS = {
@@ -508,6 +543,7 @@ key_config = {
     arcade.key.SPACE: PlayerAction.select,
     arcade.key.BRACKETLEFT: PlayerAction.rotate_left,
     arcade.key.BRACKETRIGHT: PlayerAction.rotate_right,
+    arcade.key.F: PlayerAction.flip,
 }
 
 
