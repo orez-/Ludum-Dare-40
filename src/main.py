@@ -100,6 +100,7 @@ class TweenableSprite(arcade.sprite.Sprite):
         if 'scale' in self._tween:
             self.set_texture(self._frame)
         if self._tween_progress == 1:
+            print("end", self.left, self.top)
             self.angle %= 360
             self._tween = {}
 
@@ -145,6 +146,7 @@ class InventoryItem(TweenableSprite):
 
         self.row = None
         self.col = None
+        self.rotation = 0
 
     @classmethod
     def get_item(cls, item_type, left, top, scale):
@@ -163,23 +165,19 @@ class InventoryItem(TweenableSprite):
         for x, y in self.shape:
             yield self.col + x, self.row - y
 
-    def rotate_left(self):
-        rounding = 0
-        left = self.left
-        top = self.top
-        # if self.center_row % 1 != self.center_col % 1:
-        #     rounding = 0.5
+    def rotate_left(self, nx, ny):
+        print("start", self.left, self.top)
         self.shape = [
             (
-                y - self.center_row + self.center_col + rounding,
-                self.center_col - x + self.center_row + rounding,
+                y - self.center_row + self.center_col,
+                self.center_col - x + self.center_row,
             )
             for x, y in self.shape
         ]
         self._set_tween(
             angle=self.angle + 90,
-            left=left,
-            top=top,
+            # left=nx,
+            # top=ny,
         )
 
     def rotate_right(self):
@@ -270,11 +268,6 @@ class InventoryGrid:
         for x, y in item.item_coords():
             item_at = self.contents.pop((x, y))
             assert item_at is item, item_at
-        # item.row_offset = row - item.row
-        # item.col_offset = col - item.col
-        print(item.center_row, row, item.row, item.center_col, col, item.col)
-        # item.row = None
-        # item.col = None
         return item, item.row - item.center_row, item.col + item.center_col
 
     def get_item(self, row, col):
@@ -291,10 +284,19 @@ class InventoryGrid:
             self.scale,
         )
 
-    def item_coord_at(self, row, col):
+    def item_coord_at(self, row, col, item=None):
         """
         Transform a row,col coord to screen x, y, and scale.
         """
+        if item:
+            cr = item.center_row
+            cc = item.center_col
+            if item.rotation % 2:
+                cr = item.center_col
+                cc = item.center_row
+            row += cr
+            col -= cc
+
         return (
             int(col * (self.tile_size + self.gap) + self.offset_x - self.tile_size / 2 - self.gap),
             int(row * (self.tile_size + self.gap) + self.offset_y + self.tile_size / 2 + self.gap),
@@ -411,17 +413,7 @@ class InventoryScreen:
         self.pointer.move_to(x, y, scale)
         if self.pointer.lifted_item:
             item = self.pointer.lifted_item
-
-            cr = item.center_row
-            cc = item.center_col
-            print(item.angle)
-            if item.angle in {90, 270}:
-                cr = item.center_col
-                cc = item.center_row
-            x, y, scale = grid.item_coord_at(
-                r + cr,
-                c - cc,
-            )
+            x, y, scale = grid.item_coord_at(r, c, item)
             item.move_to(x, y, scale)
         elif grid.get_item(r, c):
             self.pointer.open_hand()
@@ -458,12 +450,18 @@ class InventoryScreen:
         elif action == PlayerAction.rotate_left:
             item = self.pointer.lifted_item
             if item:
-                item.rotate_left()
-                print("!", item.center_row, item.center_col)
-                # self.set_pointer_loc(
-                #     item.row - item.center_row,
-                #     item.col + item.center_col,
-                # )
+                grid_name, c, r = self.pointer_location
+                grid = self.grids[grid_name]
+                if c % 1 and not r % 1:
+                    r, c = self.set_pointer_loc(r + 0.5, c - 0.5)
+                elif not c % 1 and r % 1:
+                    r, c = self.set_pointer_loc(r - 0.5, c + 0.5)
+                print("rc", r, c)
+                # need to get coords rotated, but need to enqueue rotation tween with coords.
+                item.rotation += 1
+                x, y, _ = grid.item_coord_at(r, c, item)
+                print("xy", x, y)
+                item.rotate_left(x, y)
         elif action == PlayerAction.rotate_right:
             item = self.pointer.lifted_item
             if item:
@@ -476,6 +474,7 @@ class InventoryScreen:
         grid = self.grids[grid_name]
         x, y, scale = grid.pointer_coord_at(row, col)
         self.pointer.move_to(x, y, scale)
+        return row, col
 
 
 class PlayerAction(enum.Enum):
@@ -536,7 +535,7 @@ class MyApplication(arcade.Window):
         if action:
             self.ui.handle_action(action)
         else:
-            print(symbol, modifier)
+            print("key", symbol, modifier)
 
     def on_draw(self):
         """
