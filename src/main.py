@@ -31,6 +31,7 @@ TEXTURES = {
         arcade.load_texture('assets/wadingboots.png'),
         arcade.load_texture('assets/wadingboots.png', mirrored=True),
     ],
+    'item_composite_bow': [arcade.load_texture('assets/compositebow.png')],
     'item_shield': [arcade.load_texture('assets/shield.png')],
     'pointer': arcade.load_textures(
         'assets/pointer.png',
@@ -93,6 +94,11 @@ ITEM_TYPES = {
         textures=TEXTURES['item_shield'],
         symmetrical=True,
     ),
+    'composite_bow': ItemType(
+        shape=[(0, 0), (0, 1), (1, 1), (1, 2), (2, 2)],
+        textures=TEXTURES['item_composite_bow'],
+        symmetrical=True,
+    )
 }
 
 TWEEN_RATE = 5
@@ -138,8 +144,19 @@ class TweenableSprite(arcade.sprite.Sprite):
         self._tween_progress = 0
 
 
+def rotate_shape_left(shape, center_row, center_col):
+    return [
+        (
+            y - center_row + center_col,
+            center_col - x + center_row,
+        )
+        for x, y in shape
+    ]
+
+
 class InventoryItem(TweenableSprite):
-    def __init__(self, *, shape, name, textures, left, top, scale, symmetrical):
+    def __init__(self, *, shape, name, textures, left, top, scale, symmetrical, rotation=0,
+                 flip=False):
         super().__init__(
             scale=scale,
             left=left,
@@ -154,10 +171,15 @@ class InventoryItem(TweenableSprite):
 
         self.row = None
         self.col = None
-        self.rotation = 0
+        self.rotation = rotation
+        self.angle = rotation * 90
+        for _ in range(rotation):
+            self.shape = rotate_shape_left(self.shape, self.center_row, self.center_col)
+        if flip:
+            self.flip()
 
     @classmethod
-    def get_item(cls, item_type, left, top, scale):
+    def create_item(cls, item_type, left, top, scale, rotation=0, flip=False):
         shape, textures, symmetrical = ITEM_TYPES[item_type]
 
         return InventoryItem(
@@ -168,6 +190,8 @@ class InventoryItem(TweenableSprite):
             name=item_type,
             textures=textures,
             symmetrical=symmetrical,
+            rotation=rotation,
+            flip=flip,
         )
 
     def item_coords(self):
@@ -175,13 +199,7 @@ class InventoryItem(TweenableSprite):
             yield self.col + x, self.row - y
 
     def rotate_left(self, cx, cy):
-        self.shape = [
-            (
-                y - self.center_row + self.center_col,
-                self.center_col - x + self.center_row,
-            )
-            for x, y in self.shape
-        ]
+        self.shape = rotate_shape_left(self.shape, self.center_row, self.center_col)
         self._set_tween(
             angle=self.angle + 90,
             center_x=cx,
@@ -380,25 +398,26 @@ class InventoryScreen:
 
         # items
         self.items = []
-        self.add_new_item('wading_boots', 'workspace', 3, 3)
-        self.add_new_item('shield', 'workspace', 2, 0)
-        self.add_new_item('grapple_hook', 'workspace', 4, 0)
-        self.add_new_item('gascan', 'workspace', 6, 2)
-        self.add_new_item('mushroom', 'workspace', 8, 1)
-        self.add_new_item('battleaxe', 'workspace', 7, 0)
+        self.add_new_item('composite_bow', 'workspace', 4, 0, rotation=3)
+        self.add_new_item('wading_boots', 'workspace', 3, 3, flip=True)
+        self.add_new_item('shield', 'workspace', 7, 2)
+        self.add_new_item('grapple_hook', 'workspace', 3, 1, rotation=1, flip=True)
+        self.add_new_item('gascan', 'workspace', 1.5, 0.5, rotation=3)
+        self.add_new_item('mushroom', 'workspace', 9, 2, rotation=3)
+        self.add_new_item('battleaxe', 'workspace', 5, 3)
 
         # pointer
         self.pointer_location = ['inventory', 0, 0]
         x, y, scale = inventory.pointer_coord_at(0, 0)
         self.pointer = Pointer(left=x, top=y, scale=scale)
 
-    def add_new_item(self, item_name, grid_name, row, col):
+    def add_new_item(self, item_name, grid_name, row, col, *, rotation=0, flip=False):
         """
         Add an entirely new item to the world of the inventory screen.
         """
         grid = self.grids[grid_name]
         x, y, scale = grid.item_coord_at(row, col)
-        item = InventoryItem.get_item(item_name, x, y, scale)
+        item = InventoryItem.create_item(item_name, x, y, scale, rotation=rotation, flip=flip)
         self.items.append(item)
         grid.place_item(item, row, col)
 
