@@ -2,7 +2,6 @@ import collections
 import enum
 
 import arcade
-import attr
 
 
 SCREEN_WIDTH = 1024
@@ -45,11 +44,13 @@ TEXTURES = {
 }
 
 
-@attr.s(slots=True)
 class InventoryTile:
-    x = attr.ib()
-    y = attr.ib()
-    size = attr.ib()
+    __slots__ = ('x', 'y', 'size')
+
+    def __init__(self, x, y, size):
+        self.x = x
+        self.y = y
+        self.size = size
 
     def draw(self):
         """ Draw our rectangle """
