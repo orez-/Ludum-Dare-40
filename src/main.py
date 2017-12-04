@@ -27,6 +27,11 @@ TEXTURES = {
         arcade.load_texture('assets/gascan.png'),
         arcade.load_texture('assets/gascan.png', mirrored=True),
     ],
+    'item_wading_boots': [
+        arcade.load_texture('assets/wadingboots.png'),
+        arcade.load_texture('assets/wadingboots.png', mirrored=True),
+    ],
+    'item_shield': [arcade.load_texture('assets/shield.png')],
     'pointer': arcade.load_textures(
         'assets/pointer.png',
         [
@@ -77,6 +82,16 @@ ITEM_TYPES = {
         shape=[(1, 0), (1, 1), (0, 1), (0, 2), (1, 2)],
         textures=TEXTURES['item_gascan'],
         symmetrical=False,
+    ),
+    'wading_boots': ItemType(
+        shape=[(0, 0), (0, 1), (0, 2), (0, 3), (1, 3)],
+        textures=TEXTURES['item_wading_boots'],
+        symmetrical=False,
+    ),
+    'shield': ItemType(
+        shape=[(1, 1), (0, 1), (1, 0), (1, 2), (2, 1)],
+        textures=TEXTURES['item_shield'],
+        symmetrical=True,
     ),
 }
 
@@ -365,10 +380,12 @@ class InventoryScreen:
 
         # items
         self.items = []
-        # self.add_new_item('grapple_hook', 'inventory', 3, 0)
-        self.add_new_item('gascan', 'inventory', 3, 0)
-        # self.add_new_item('mushroom', 'inventory', 3, 2)
-        self.add_new_item('battleaxe', 'inventory', 3, 3)
+        self.add_new_item('wading_boots', 'workspace', 3, 3)
+        self.add_new_item('shield', 'workspace', 2, 0)
+        self.add_new_item('grapple_hook', 'workspace', 4, 0)
+        self.add_new_item('gascan', 'workspace', 6, 2)
+        self.add_new_item('mushroom', 'workspace', 8, 1)
+        self.add_new_item('battleaxe', 'workspace', 7, 0)
 
         # pointer
         self.pointer_location = ['inventory', 0, 0]
