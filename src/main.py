@@ -101,6 +101,7 @@ class TweenableSprite(arcade.sprite.Sprite):
             self._tween = {}
 
     def _set_tween(self, **properties):
+        assert not self._tween, self._tween
         self._tween = {
             key: (getattr(self, key), value)
             for key, value in properties.items()
@@ -192,6 +193,10 @@ class Pointer(TweenableSprite):
         )
 
         self.lifted_item = None
+
+    @property
+    def can_move(self):
+        return super().can_move and (not self.lifted_item or self.lifted_item.can_move)
 
     def point_hand(self):
         self._frame = 0
@@ -370,8 +375,6 @@ class InventoryScreen:
             item.update(dt)
 
     def _handle_move(self, action):
-        if not self.pointer.can_move:
-            return
         grid, c, r = self.pointer_location
         if action == PlayerAction.up:
             if r >= self.grids[grid].rows - 1:
@@ -413,6 +416,8 @@ class InventoryScreen:
             self.pointer.point_hand()
 
     def handle_action(self, action):
+        if not self.pointer.can_move:
+            return
         if action in DIRECTIONS:
             self._handle_move(action)
         elif action == PlayerAction.select:
